@@ -1,4 +1,5 @@
 
+from src.runner_kern import run_kern_method
 
 def entry_point():
     print("Choose a heat exchanger estimation method:")
@@ -10,7 +11,7 @@ def entry_point():
     
     match estimation_method:
         case "a":
-            print("Kern's method placeholder")
+            run_kern_method()
         case "b":
             print("Bell-Delaware method placeholder")
         case "c":

@@ -1,7 +1,8 @@
 import math
 from typing import List, Tuple, Optional
 from src.design_structure import ProcessConditions, HXGeometry
-from src import kern_correlations
+from src import kern_correlations as kern
+from src import hx_utils as hxu
 
 def solve_design(
     conditions: ProcessConditions,
@@ -28,19 +29,10 @@ def solve_design(
     head_types = ["Front Head A", "Front Head B"] 
     
     # Duty Calculation
-    if hot_side == "shell":
-        Q = conditions.mass_flow_hot * hot_fluid_props['cp'] * abs(conditions.t_in_hot - conditions.t_out_hot)
-    else:
-        Q = conditions.mass_flow_hot * hot_fluid_props['cp'] * abs(conditions.t_in_hot - conditions.t_out_hot)
+    Q = hxu.fnDuty(conditions.m_flow_tube, hot_fluid_props['cp'], conditions.t_in_hot, conditions.t_out_hot)
         
     # Calculate LMTD
-    d1 = abs(conditions.t_in_hot - conditions.t_out_cold)
-    d2 = abs(conditions.t_out_hot - conditions.t_in_cold)
-    
-    if d1 == d2:
-        lmtd = d1
-    else:
-        lmtd = (d1 - d2) / math.log(d1 / d2)
+    lmtd = hxu.fnLMTD(conditions.t_in_hot, conditions.t_out_hot, conditions.t_in_cold, conditions.t_out_cold)
     
     print(f"Target Duty: {Q/1000:.2f} kW")
     print(f"LMTD (base): {lmtd:.2f} K")
@@ -104,13 +96,13 @@ def converge_design_for_config(
         N_req = A_req / (math.pi * tod * L)
         
         # 3. Find Shell Diameter (USING USER LOGIC)
-        Ds = kern_correlations.get_optimal_shell_diameter(N_req, tod, pr, layout, t_pass)
+        Ds = kern.get_optimal_shell_diameter(N_req, tod, pr, layout, t_pass)
         
         if Ds is None:
             return None # No shell fits
             
         # 4. Get Actual Tube Count for this shell (USING USER LOGIC)
-        Nt = kern_correlations.get_tube_count_for_shell(Ds, tod, pr, layout, t_pass)
+        Nt = kern.get_tube_count_for_shell(Ds, tod, pr, layout, t_pass)
         
         # 5. Construct Geometry
         geo = HXGeometry(
@@ -158,22 +150,22 @@ def evaluate_design(
     # (Same as before, simplified for brevity)
     # Assign Fluids
     if hot_side == "shell":
-        shell_props, shell_flow = hot_props, cond.mass_flow_hot
-        tube_props, tube_flow = cold_props, cond.mass_flow_cold
+        shell_props, shell_flow = hot_props, cond.m_flow_tube
+        tube_props, tube_flow = cold_props, cond.m_flow_shell
         shell_fouling = cond.fouling_factor_hot
         tube_fouling = cond.fouling_factor_cold
         allowed_dp_shell = cond.max_dp_hot
         allowed_dp_tube = cond.max_dp_cold
     else:
-        shell_props, shell_flow = cold_props, cond.mass_flow_cold
-        tube_props, tube_flow = hot_props, cond.mass_flow_hot
+        shell_props, shell_flow = cold_props, cond.m_flow_shell
+        tube_props, tube_flow = hot_props, cond.m_flow_tube
         shell_fouling = cond.fouling_factor_cold
         tube_fouling = cond.fouling_factor_hot
         allowed_dp_shell = cond.max_dp_cold
         allowed_dp_tube = cond.max_dp_hot
         
-    ho = kern_correlations.calc_shell_side_h(geo, shell_flow, shell_props['cp'], shell_props['mu'], shell_props['k'], shell_props['rho'])
-    hi = kern_correlations.calc_tube_side_h(geo, tube_flow, tube_props['cp'], tube_props['mu'], tube_props['k'], tube_props['rho'])
+    ho = kern.fnShellHTC(geo, shell_flow, shell_props['cp'], shell_props['mu'], shell_props['k'], shell_props['rho'])
+    hi = kern.fnTubeHTC(geo, tube_flow, tube_props['cp'], tube_props['mu'], tube_props['k'], tube_props['rho'])
     
     R_wall = 0.0001
     
@@ -189,8 +181,8 @@ def evaluate_design(
     R_f_total = shell_fouling + (tube_fouling * area_ratio)
     u_design = 1.0 / ( (1.0/u_clean) + R_f_total )
     
-    dPs = kern_correlations.calc_shell_side_dP(geo, shell_flow, shell_props['rho'], shell_props['mu'])
-    dPt = kern_correlations.calc_tube_side_dP(geo, tube_flow, tube_props['rho'], tube_props['mu'])
+    dPs = kern.fnShellDP(geo, shell_flow, shell_props['rho'], shell_props['mu'])
+    dPt = kern.fnTubeDP(geo, tube_flow, tube_props['rho'], tube_props['mu'])
     
     if dPs is None: dPs = 1000.0
     if dPt is None: dPt = 1000.0

@@ -46,3 +46,17 @@ def fnLMTD(T_i: float, T_o: float, t_i:float, t_o:float) -> float:
 
     return lmtd
 
+def fnDuty(m_dot: float, cp: float, T_i: float, T_o: float) -> float:
+    """
+    Calculate heat duty.
+    
+    Args:
+        m_dot: Mass flow rate of the fluid.
+        cp: Heat capacity of the fluid.
+        T_i: Inlet temperature of the fluid.
+        T_o: Outlet temperature of the fluid.
+    
+    Returns:
+        float: Heat duty of the fluid.
+    """
+    return m_dot * cp * (T_i - T_o)
